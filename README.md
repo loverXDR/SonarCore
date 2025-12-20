@@ -1,8 +1,7 @@
 # Sonar Core
 
-Sonar Core - service full audio processing: ASR, diarization, semantic search and summarization via LLM
-
-this service are useful for meetings, calls when you need to understand information without dirty context
+*Sonar Core* is a full-service audio processing system that includes ASR, speaker diarization, semantic search, and summarization via LLMs.  
+This service is especially useful for meetings and calls where you need to extract meaningful information without unnecessary or irrelevant context.
 
 ## Key features
 
