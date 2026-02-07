@@ -2,7 +2,11 @@ from typing import List, Union
 
 from pydantic import BaseModel
 
-from .sherpa_schema import BaseSherpaConfig, SherpaParaformerConfig, SherpaTransducerConfig
+from .sherpa_schema import (
+    BaseSherpaConfig,
+    SherpaParaformerConfig,
+    SherpaTransducerConfig,
+)
 
 
 class WhisperConfig(BaseModel):

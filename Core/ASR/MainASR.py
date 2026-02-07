@@ -1,6 +1,6 @@
-from Core.ASR.SherpaASR import SherpaOfflineASR
-from Core.ASR.WhisperASR import WhisperASR
-from Core.Schemas.asr_schema import ASRConfig, ASRResult, BaseSherpaConfig, WhisperConfig
+from .SherpaASR import SherpaOfflineASR
+from .WhisperASR import WhisperASR
+from Core.Schemas import ASRConfig, ASRResult, BaseSherpaConfig, WhisperConfig
 
 
 class MainASR:

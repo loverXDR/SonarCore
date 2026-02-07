@@ -2,17 +2,17 @@
 
 from typing import Union
 from sherpa_onnx import OfflineRecognizer
-from Core.Schemas.sherpa_schema import SherpaParaformerConfig, SherpaTransducerConfig
-from Core.Schemas.asr_schema import ASRResult
-from Core.Utils.audio_utils import wav_to_data
-
-
-from . import BaseASR
+from Core.Schemas import (
+    SherpaParaformerConfig,
+    SherpaTransducerConfig,
+    ASRResult,
+)
+from Core.Utils import wav_to_data
+from .base import BaseASR
 
 
 class SherpaOfflineASR(BaseASR):
     """Sherpa ASR class based on sherpa-onnx"""
-
 
     def __init__(
         self, config: Union[SherpaParaformerConfig, SherpaTransducerConfig]

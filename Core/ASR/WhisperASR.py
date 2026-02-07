@@ -2,15 +2,14 @@
 
 from typing import Iterable, Tuple
 from faster_whisper import WhisperModel
-from Core.Schemas.asr_schema import ASRResult, ASRSegment, WhisperConfig
+from Core.Schemas import ASRResult, ASRSegment, WhisperConfig
 
 
-from . import BaseASR
+from .base import BaseASR
 
 
 class WhisperASR(BaseASR):
     """Whisper ASR class based on faster-whisper"""
-
 
     def __init__(self, config: WhisperConfig) -> None:
         self.config = config
