@@ -2,44 +2,61 @@
 
 from typing import Iterable, Tuple
 from faster_whisper import WhisperModel
-from faster_whisper.transcribe import TranscriptionInfo, Segment
+from Core.Schemas.asr_schema import ASRResult, ASRSegment, WhisperConfig
 
 
-class WhisperASR:
+from . import BaseASR
+
+
+class WhisperASR(BaseASR):
     """Whisper ASR class based on faster-whisper"""
 
-    def __init__(
-        self, model_size: str = "small", device: str = "cpu", compute_type: str = "int8"
-    ) -> None:
+
+    def __init__(self, config: WhisperConfig) -> None:
+        self.config = config
         self.model = WhisperModel(
-            model_size_or_path=model_size, device=device, compute_type=compute_type
+            model_size_or_path=self.config.model_size,
+            device=self.config.device,
+            compute_type=self.config.compute_type,
         )
 
-    def transcribe(
-        self, audio_path: str, beam_size: int = 5, lang: str = None
-    ) -> Tuple[Iterable[Segment], TranscriptionInfo]:
+    def transcribe(self, audio_path: str) -> ASRResult:
         """Transcribe the given audio file
 
         Args:
             audio_path (str): Path to the audio file
-            beam_size (int, optional): Beam size. Defaults to 5.
-            lang (str, optional): Language. Defaults to None.
 
         returns:
-            Tuple[Iterable[Segment], TranscriptionInfo]: Transcription and transcription info
+            ASRResult: Transcription result
         """
 
         transcription_list, transcription_info = self.model.transcribe(
-            audio_path, beam_size=beam_size, language=lang
+            audio_path,
+            beam_size=self.config.beam_size,
+            language=self.config.lang,
         )
-        return transcription_list, transcription_info
+
+        segments = []
+        full_text = ""
+        for segment in transcription_list:
+            segments.append(
+                ASRSegment(start=segment.start, end=segment.end, text=segment.text)
+            )
+            full_text += segment.text
+
+        return ASRResult(
+            text=full_text,
+            segments=segments,
+            info=transcription_info._asdict(),
+        )
 
 
 if __name__ == "__main__":
-    model = WhisperASR()
+    config = WhisperConfig()
+    model = WhisperASR(config)
 
-    transcription, info = model.transcribe("Path/to/audio.wav")
+    result = model.transcribe("Path/to/audio.wav")
 
-    for segment in transcription:
+    for segment in result.segments:
         print(f"[{segment.start:.2f} - {segment.end:.2f}] {segment.text}")
-    print(info)
+    print(result.info)

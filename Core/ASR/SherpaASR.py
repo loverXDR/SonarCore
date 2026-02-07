@@ -3,11 +3,16 @@
 from typing import Union
 from sherpa_onnx import OfflineRecognizer
 from Core.Schemas.sherpa_schema import SherpaParaformerConfig, SherpaTransducerConfig
+from Core.Schemas.asr_schema import ASRResult
 from Core.Utils.audio_utils import wav_to_data
 
 
-class SherpaOfflineASR:
+from . import BaseASR
+
+
+class SherpaOfflineASR(BaseASR):
     """Sherpa ASR class based on sherpa-onnx"""
+
 
     def __init__(
         self, config: Union[SherpaParaformerConfig, SherpaTransducerConfig]
@@ -22,32 +27,33 @@ class SherpaOfflineASR:
                 decoder=self.config.decoder,
                 encoder=self.config.encoder,
                 joiner=self.config.joiner,
-                tokens=self.config.tokens,
+                tokens=self.config.tokens_path,
                 num_threads=self.config.num_threads,
-                debug=self.config.debug,
+                debug=self.config.debug_mode,
                 provider=self.config.provider,
             )
         elif self.config.model_type == "paraformer":
             return OfflineRecognizer.from_paraformer(
                 paraformer=self.config.model,
-                tokens=self.config.tokens,
+                tokens=self.config.tokens_path,
                 num_threads=self.config.num_threads,
-                debug=self.config.debug,
+                debug=self.config.debug_mode,
                 provider=self.config.provider,
             )
         else:
             raise ValueError("Invalid model type")
 
-    def transcribe(self, audio_path, sample_rate: int = 16000) -> str:
+    def transcribe(self, audio_path, sample_rate: int = 16000) -> ASRResult:
         """Transcribe the given audio data
         Args:
             audio_path (str): path to audio data
             sample_rate (int, optional): sample rate of the audio to be transcribed. Defaults to 16000.
         returns:
-            str: transcribed audio data
+            ASRResult: transcribed audio data
         """
-        audio_data = wav_to_data(audio_path)
+        sample_rate_src, audio_data = wav_to_data(audio_path)
         s = self.recognizer.create_stream()
-        s.accept_waveform(audio_data)
+        s.accept_waveform(sample_rate_src, audio_data)
         self.recognizer.decode_stream(s)
-        return s.result.text
+        text = s.result.text
+        return ASRResult(text=text, segments=[])
