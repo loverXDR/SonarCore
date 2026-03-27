@@ -1,5 +1,7 @@
 """Query engine based on llama-index"""
 
+import os
+
 from typing import Optional
 
 from llama_index.core import VectorStoreIndex, Settings
@@ -45,7 +47,7 @@ class LlamaQueryEngine(BaseQueryEngine):
 
         if doc_id:
             filters = MetadataFilters(
-                filters=[MetadataFilter(key="doc_id", value=doc_id)]
+                filters=[MetadataFilter(key="session_id", value=doc_id)]
             )
             engine_kwargs["filters"] = filters
 
@@ -86,8 +88,8 @@ if __name__ == "__main__":
     index = builder.load_index()
 
     llm_config = LLMConfig(
-        api_base="https://api.openai.com/v1/",
-        api_key="your-api-key",
+        api_base=os.getenv("LLM_API_BASE", "https://api.openai.com/v1/"),
+        api_key=os.getenv("LLM_API_KEY", "your_api_key_here"),
     )
     engine = LlamaQueryEngine(index, llm_config)
 

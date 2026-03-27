@@ -1,5 +1,6 @@
 """Pipeline orchestrator: audio -> ASR -> index -> agent"""
 
+from typing import Optional
 from llama_index.core import Document
 
 from Core.Schemas import (
@@ -97,24 +98,27 @@ class SonarPipeline:
         self,
         audio_path: str,
         use_diarization: bool = False,
+        session_id: Optional[str] = None,
     ) -> SonarAgent:
         """Process audio file through full pipeline
 
         Args:
             audio_path (str): Path to audio file
             use_diarization (bool): Whether to apply speaker diarization
+            session_id (str, optional): Session ID for metadata tagging
 
         Returns:
             SonarAgent: Ready-to-chat agent
         """
         text = self.transcribe_audio_to_text(audio_path, use_diarization)
-        return self.process_text(text)
+        return self.process_text(text, session_id)
 
-    def process_text(self, text: str) -> SonarAgent:
+    def process_text(self, text: str, session_id: Optional[str] = None) -> SonarAgent:
         """Process raw text through RAG pipeline
 
         Args:
             text (str): Input text (transcript or document)
+            session_id (str, optional): Session ID for metadata tagging
 
         Returns:
             SonarAgent: Ready-to-chat agent
@@ -128,9 +132,14 @@ class SonarPipeline:
             )
         )
         nodes = parser.parse_text(text)
+        
+        # Tag nodes with session_id for isolation
+        if session_id:
+            for node in nodes:
+                node.metadata["session_id"] = session_id
 
         qa_builder = QAIndexBuilder(self.config.index)
-        documents = [Document(text=text)]
+        documents = [Document(text=text, metadata={"session_id": session_id} if session_id else {})]
         qa_index = qa_builder.build(documents)
 
         summary_builder = SummaryIndexBuilder(
@@ -146,8 +155,8 @@ class SonarPipeline:
         )
 
         tools = [
-            create_search_tool(search_engine),
-            create_summarize_tool(summary_engine),
+            create_search_tool(search_engine, session_id=session_id),
+            create_summarize_tool(summary_engine, session_id=session_id),
         ]
 
         return SonarAgent(

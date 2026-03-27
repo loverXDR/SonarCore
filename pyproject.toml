@@ -33,3 +33,7 @@ dependencies = [
 
 [project.scripts]
 sonar-cli = "Cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["Api", "Api.*", "Core", "Core.*", "Agent_workflow", "Agent_workflow.*", "Cli", "Cli.*"]

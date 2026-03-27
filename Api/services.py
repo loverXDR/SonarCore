@@ -34,10 +34,10 @@ class AgentManager:
         """
         pipeline_config = config or self.default_config
         pipeline = SonarPipeline(config=pipeline_config)
-        agent = await run_in_threadpool(
-            pipeline.process_audio, audio_path, use_diarization
-        )
         session_id = str(uuid.uuid4())
+        agent = await run_in_threadpool(
+            pipeline.process_audio, audio_path, use_diarization, session_id
+        )
         self.sessions[session_id] = agent
         return session_id
 
@@ -57,8 +57,8 @@ class AgentManager:
         """
         pipeline_config = config or self.default_config
         pipeline = SonarPipeline(config=pipeline_config)
-        agent = await run_in_threadpool(pipeline.process_text, text)
         session_id = str(uuid.uuid4())
+        agent = await run_in_threadpool(pipeline.process_text, text, session_id)
         self.sessions[session_id] = agent
         return session_id
 

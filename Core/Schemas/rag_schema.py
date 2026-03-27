@@ -1,5 +1,6 @@
 """Schemas for RAG utilities"""
 
+import os
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -8,15 +9,15 @@ from pydantic import BaseModel, Field
 class DocumentParserConfig(BaseModel):
     """Config for document parser"""
 
-    chunk_size: int = 256
-    chunk_overlap: int = 32
+    chunk_size: int = int(os.getenv("RAG_CHUNK_SIZE", "256"))
+    chunk_overlap: int = int(os.getenv("RAG_CHUNK_OVERLAP", "32"))
 
 
 class EmbeddingConfig(BaseModel):
     """Config for embedding model"""
 
-    model_name: str = "intfloat/multilingual-e5-small"
-    device: str = "cpu"
+    model_name: str = os.getenv("EMBED_MODEL_NAME", "intfloat/multilingual-e5-small")
+    device: str = os.getenv("EMBED_DEVICE", "cpu")
 
 
 class LLMConfig(BaseModel):
@@ -24,14 +25,14 @@ class LLMConfig(BaseModel):
 
     api_base: str
     api_key: str
-    model: str = "gpt-4o-mini"
+    model: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
 
 
 class VectorStoreConfig(BaseModel):
     """Config for Qdrant vector store"""
 
-    url: str = "http://localhost:6333"
-    collection_name: str = "SonarPlace"
+    url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
+    collection_name: str = os.getenv("QDRANT_COLLECTION", "SonarPlace")
 
 
 class IndexConfig(BaseModel):

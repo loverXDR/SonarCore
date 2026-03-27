@@ -1,3 +1,6 @@
+"""Schemas for ASR utilities"""
+
+import os
 from typing import List, Union
 
 from pydantic import BaseModel
@@ -13,11 +16,11 @@ class WhisperConfig(BaseModel):
     """config class for faster-whisper"""
 
     model_type: str = "whisper"
-    model_size: str = "small"
-    device: str = "cpu"
-    compute_type: str = "int8"
-    beam_size: int = 5
-    lang: str = None
+    model_size: str = os.getenv("WHISPER_MODEL_SIZE", "small")
+    device: str = os.getenv("WHISPER_DEVICE", "cpu")
+    compute_type: str = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
+    beam_size: int = int(os.getenv("WHISPER_BEAM_SIZE", "5"))
+    lang: str = os.getenv("WHISPER_LANG", None)
 
 
 class ASRSegment(BaseModel):
