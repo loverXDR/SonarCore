@@ -1,0 +1,53 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sonarcore_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+
+      - ./Api:/app/Api
+      - ./Core:/app/Core
+      - ./Agent_workflow:/app/Agent_workflow
+      - ./Cli:/app/Cli
+
+
+      - ./.env:/app/.env
+
+
+      - hf_cache:/root/.cache/huggingface
+
+      - whisper_cache:/root/.cache/whisper
+
+    environment:
+
+      - QDRANT_URL=http://qdrant:6333
+    env_file:
+      - .env
+
+    depends_on:
+      - qdrant
+
+    command: [ "uvicorn", "Api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload" ]
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: sonarcore_qdrant
+    restart: unless-stopped
+    ports:
+      - "6337:6333"
+      - "6338:6334"
+    volumes:
+
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  hf_cache:
+    name: sonarcore_hf_cache
+  whisper_cache:
+    name: sonarcore_whisper_cache
+  qdrant_data:
+    name: sonarcore_qdrant_data
