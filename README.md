@@ -12,34 +12,6 @@ This service processes meeting and call recordings to extract meaningful informa
 - RAG & Indexing: LlamaIndex for document chunking, indexing, and semantic search.
 - Server: Uvicorn.
 
-## API Endpoints
-
-The API provides endpoints for transcription and interactive agent sessions.
-
-### Direct Transcription
-**POST /transcribe**
-Transcribes audio directly and returns raw text along with segmented timestamps.
-Supports exactly one of the following inputs:
-- file: Multipart file upload.
-- url: Direct link to an audio file.
-- file_path: Local file path on the server.
-- use_diarization: Boolean flag to enable speaker separation.
-
-### Session Management
-**POST /sessions/audio**
-Processes an audio file, builds a RAG index, and initializes an interactive agent session.
-Accepts audio via file, url, or file_path.
-
-**POST /sessions/text**
-Initializes an agent session from a raw text payload.
-
-**DELETE /sessions/{session_id}**
-Deletes an active session and frees memory.
-
-### Agent Chat
-**POST /sessions/{session_id}/chat**
-Sends a text message to an active agent session to ask questions about the transcript or request a summary.
-
 ## RAG Pipeline Architecture
 The system uses a Multi-Agent RAG (Retrieval-Augmented Generation) approach based on LangGraph. 
 When text or audio is processed, it is chopped into smaller semantic chunks and vectorized into a LlamaIndex query engine database. 

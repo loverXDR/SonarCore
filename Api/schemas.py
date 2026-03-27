@@ -1,6 +1,7 @@
 """Pydantic schemas for the API"""
 
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 
 from Core.Schemas import AgentConfig, AgentMessage
@@ -87,4 +88,31 @@ class TranscriptionResponse(BaseModel):
     text: str = Field(description="The transcribed text")
     segments: List[TranscriptionSegment] = Field(
         default_factory=list, description="Transcription segments with timestamps"
+    )
+
+
+class SessionInfo(BaseModel):
+    """Detailed information about an agent session."""
+
+    session_id: str = Field(description="Unique session identifier")
+    created_at: datetime = Field(description="Timestamp of session creation")
+    last_active: datetime = Field(description="Timestamp of last activity")
+    config: AgentConfig = Field(description="Configuration used for this session")
+    message_count: int = Field(default=0, description="Number of messages in history")
+
+
+class SessionListResponse(BaseModel):
+    """Response containing a list of sessions."""
+
+    sessions: List[SessionInfo] = Field(description="List of active sessions")
+
+
+class HealthCheckResponse(BaseModel):
+    """System health status response."""
+
+    status: str = Field(description="Overall system status (e.g., 'ok')")
+    version: str = Field(description="API version")
+    uptime_seconds: float = Field(description="System uptime")
+    dependencies: Dict[str, str] = Field(
+        default_factory=dict, description="Status of major dependencies"
     )

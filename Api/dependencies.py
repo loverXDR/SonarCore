@@ -2,6 +2,7 @@
 
 from Core.Schemas import AgentConfig, LLMConfig
 from .services import AgentManager
+from .repositories import InMemorySessionRepository
 import os
 
 
@@ -22,8 +23,9 @@ def get_default_agent_config() -> AgentConfig:
     return AgentConfig(llm=llm_config)
 
 
-# Singleton manager instance
-_agent_manager = AgentManager(default_config=get_default_agent_config())
+# Singleton repository and manager instances
+_session_repo = InMemorySessionRepository()
+_agent_manager = AgentManager(repository=_session_repo, default_config=get_default_agent_config())
 
 
 def get_agent_manager() -> AgentManager:

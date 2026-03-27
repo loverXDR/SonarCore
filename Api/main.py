@@ -10,11 +10,16 @@ from .schemas import (
     ChatMessageRequest,
     ChatMessageResponse,
     TranscriptionResponse,
+    SessionInfo,
+    SessionListResponse,
+    HealthCheckResponse,
 )
+from Core.Schemas import AgentMessage
 from .services import AgentManager
 from .dependencies import get_agent_manager
 from .utils import handle_audio_input
-from typing import Optional
+from typing import Optional, List
+import time
 from fastapi import UploadFile, File, Form, Query
 
 app = FastAPI(
@@ -22,6 +27,8 @@ app = FastAPI(
     description="Async API to interact with the multi-agent RAG workflow",
     version="1.0.0",
 )
+
+start_time = time.time()
 
 
 @app.post("/sessions/audio", response_model=SessionResponse, tags=["Sessions"])
@@ -47,9 +54,28 @@ async def create_session_from_audio(
             use_diarization=request.use_diarization,
             config=request.config,
         )
-        return SessionResponse(session_id=session_id, message="Session created from audio.")
+        return SessionResponse(
+            session_id=session_id, message="Session created from audio."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/sessions", response_model=SessionListResponse, tags=["Sessions"])
+async def list_sessions(manager: AgentManager = Depends(get_agent_manager)):
+    """List all active agent sessions."""
+    return SessionListResponse(sessions=manager.get_all_sessions())
+
+
+@app.get("/sessions/{session_id}", response_model=SessionInfo, tags=["Sessions"])
+async def get_session(
+    session_id: str, manager: AgentManager = Depends(get_agent_manager)
+):
+    """Get metadata for a specific session."""
+    try:
+        return manager.get_session_details(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.post("/sessions/text", response_model=SessionResponse, tags=["Sessions"])
@@ -73,7 +99,9 @@ async def create_session_from_text(
         session_id = await manager.create_session_from_text(
             text=request.text, config=request.config
         )
-        return SessionResponse(session_id=session_id, message="Session created from text.")
+        return SessionResponse(
+            session_id=session_id, message="Session created from text."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -112,6 +140,21 @@ async def chat_with_agent(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/sessions/{session_id}/history",
+    response_model=List[AgentMessage],
+    tags=["Chat"],
+)
+async def get_session_history(
+    session_id: str, manager: AgentManager = Depends(get_agent_manager)
+):
+    """Retrieve full conversation history for a session."""
+    try:
+        return manager.get_session_history(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.delete("/sessions/{session_id}", tags=["Sessions"])
@@ -166,15 +209,35 @@ async def transcribe_audio(
     try:
         async with handle_audio_input(file=file, url=url, file_path=file_path) as path:
             result = await manager.transcribe_audio(
-                audio_path=path,
-                use_diarization=use_diarization,
-                config=None
+                audio_path=path, use_diarization=use_diarization, config=None
             )
-            return TranscriptionResponse(text=result["text"], segments=result["segments"])
+            return TranscriptionResponse(
+                text=result["text"], segments=result["segments"]
+            )
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/health", response_model=HealthCheckResponse, tags=["System"])
+async def health_check(manager: AgentManager = Depends(get_agent_manager)):
+    """Check API health and status of real dependencies."""
+    dependency_status = await manager.check_health()
+    
+    # Overall status is 'error' if any critical dependency is unreachable
+    status = "ok"
+    for dep_status in dependency_status.values():
+        if "unreachable" in dep_status:
+            status = "error"
+            break
+
+    return HealthCheckResponse(
+        status=status,
+        version="1.0.0",
+        uptime_seconds=time.time() - start_time,
+        dependencies=dependency_status,
+    )
 
 
 if __name__ == "__main__":
