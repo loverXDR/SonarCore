@@ -5,7 +5,6 @@ from llama_index.core import Document
 from Core.Schemas import (
     AgentConfig,
     DocumentParserConfig,
-    LLMConfig,
 )
 from Core.ASR import MainASR
 from Core.Diarization import PyannoteDiarization
@@ -109,7 +108,8 @@ class SonarPipeline:
 
         return SonarAgent(
             config=self.config,
-            tools=tools,
+            search_tool=tools[0],
+            summarize_tool=tools[1],
         )
 
     @staticmethod
