@@ -86,7 +86,7 @@ if __name__ == "__main__":
     index = builder.load_index()
 
     llm_config = LLMConfig(
-        api_base="https://gptproxy.recdev.ru:444/v1/",
+        api_base="https://api.openai.com/v1/",
         api_key="your-api-key",
     )
     engine = LlamaQueryEngine(index, llm_config)

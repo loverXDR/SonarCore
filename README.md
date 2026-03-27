@@ -40,18 +40,39 @@ Deletes an active session and frees memory.
 **POST /sessions/{session_id}/chat**
 Sends a text message to an active agent session to ask questions about the transcript or request a summary.
 
+## RAG Pipeline Architecture
+The system uses a Multi-Agent RAG (Retrieval-Augmented Generation) approach based on LangGraph. 
+When text or audio is processed, it is chopped into smaller semantic chunks and vectorized into a LlamaIndex query engine database. 
+Instead of fitting the entire transcription into the LLM context window, **the LLM is equipped with Semantic Search and Summarization Tools**.
+When you ask a question during a chat session, the LLM calls these tools to search the index and fetch exactly the relevant pieces of the transcript it needs to answer you.
+
+## Interactive CLI Interface
+
+In addition to the core API, an interactive Python command-line interface is available for direct terminal usage without running the web server.
+
+To launch the CLI menu, run:
+```bash
+sonar-cli
+```
+*(or `python -m Cli.main` if not installed via pip)*
+
+**Features of the CLI**:
+- **Option 1**: Standalone audio translation and diarization (prints to terminal).
+- **Options 2 & 3**: Processes text/audio and drops you straight into an interactive, infinite AI chat loop (`You:` -> `Agent:`).
+- Supports elegant session disposal upon exiting the chat loop.
+
 ## How to Run
 
 1. Install Dependencies
-Ensure you have Python 3.12+ installed, then install the required packages:
+Ensure you have Python 3.12+ installed, then install the project and its core dependencies:
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 2. Set Environment Variables
 Export necessary API keys and configurations:
 ```bash
-export LLM_API_BASE="https://gptproxy.recdev.ru:444/v1/"
+export LLM_API_BASE="https://api.openai.com/v1/"
 export LLM_API_KEY="your_api_key"
 export HF_TOKEN="your_huggingface_token" # Required for Pyannote diarization
 ```

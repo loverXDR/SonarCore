@@ -16,8 +16,8 @@ def get_default_agent_config() -> AgentConfig:
     """
     # Assuming standard defaults, using placeholder key as done in test.py
     llm_config = LLMConfig(
-        api_base=os.getenv("LLM_API_BASE", "https://gptproxy.recdev.ru:444/v1/"),
-        api_key=os.getenv("LLM_API_KEY", "d41d8cd98f00b204e9800998ecf8427e"),
+        api_base=os.getenv("LLM_API_BASE", "https://api.openai.com/v1/"),
+        api_key=os.getenv("LLM_API_KEY", "your_api_key_here"),
     )
     return AgentConfig(llm=llm_config)
 

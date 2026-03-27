@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sonarcore"
+version = "0.1.0"
+description = "Full-service audio processing system with ASR, diarization, and semantic search RAG agent."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "python-multipart",
+    "faster-whisper>=1.0.0",
+    "pyannote.audio>=3.1.1",
+    "langchain-core",
+    "langchain-openai",
+    "langgraph",
+    "llama-index",
+    "llama-index-core",
+    "llama-index-llms-openai",
+    "llama-index-embeddings-huggingface",
+    "llama-index-vector-stores-qdrant",
+    "qdrant-client",
+    "python-dotenv",
+    "pydantic",
+    "httpx",
+    "av",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0"
+]
+
+[project.scripts]
+sonar-cli = "Cli.main:main"
