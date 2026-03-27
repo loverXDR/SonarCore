@@ -1,5 +1,6 @@
 """Whisper ASR class based on faster-whisper"""
 
+import dataclasses
 from typing import Iterable, Tuple
 from faster_whisper import WhisperModel
 from Core.Schemas import ASRResult, ASRSegment, WhisperConfig
@@ -46,7 +47,7 @@ class WhisperASR(BaseASR):
         return ASRResult(
             text=full_text,
             segments=segments,
-            info=transcription_info._asdict(),
+            info=dataclasses.asdict(transcription_info),
         )
 
 

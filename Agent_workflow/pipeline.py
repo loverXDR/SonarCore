@@ -29,6 +29,70 @@ class SonarPipeline:
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
 
+    def process_audio_segments(
+        self,
+        audio_path: str,
+        use_diarization: bool = False,
+    ) -> tuple[str, list[dict]]:
+        """Transcribe and return (text, segments) with timestamps.
+
+        Args:
+            audio_path (str): Path to audio file.
+            use_diarization (bool, optional): Whether to apply speaker diarization. Defaults to False.
+
+        Returns:
+            tuple[str, list[dict]]: A tuple containing the full raw text and a list of segment dictionaries.
+        """
+        asr = MainASR(self.config.asr)
+        asr_result = asr.transcribe(audio_path)
+        
+        segments_out = []
+        if use_diarization and self.config.diarization:
+            diarizer = PyannoteDiarization(
+                self.config.diarization,
+            )
+            diar_result = diarizer.diarize(audio_path)
+
+            for seg in diar_result.segments:
+                seg_text = self._find_text_for_segment(
+                    seg, asr_result.segments,
+                )
+                segments_out.append({
+                    "start": seg.start,
+                    "end": seg.end,
+                    "text": seg_text,
+                    "speaker": seg.speaker
+                })
+            text = "\n".join(f"[{s['speaker']}]: {s['text']}" for s in segments_out)
+        else:
+            for seg in asr_result.segments:
+                segments_out.append({
+                    "start": seg.start,
+                    "end": seg.end,
+                    "text": seg.text,
+                    "speaker": None
+                })
+            text = asr_result.text
+            
+        return text, segments_out
+
+    def transcribe_audio_to_text(
+        self,
+        audio_path: str,
+        use_diarization: bool = False,
+    ) -> str:
+        """Transcribe and optionally diarize audio to get raw text.
+
+        Args:
+            audio_path (str): Path to audio file.
+            use_diarization (bool, optional): Whether to apply speaker diarization. Defaults to False.
+
+        Returns:
+            str: The final transcribed text block.
+        """
+        text, _ = self.process_audio_segments(audio_path, use_diarization)
+        return text
+
     def process_audio(
         self,
         audio_path: str,
@@ -38,32 +102,12 @@ class SonarPipeline:
 
         Args:
             audio_path (str): Path to audio file
-            use_diarization (bool): Whether to apply
-                speaker diarization
+            use_diarization (bool): Whether to apply speaker diarization
 
         Returns:
             SonarAgent: Ready-to-chat agent
         """
-        asr = MainASR(self.config.asr)
-        asr_result = asr.transcribe(audio_path)
-        text = asr_result.text
-
-        if use_diarization and self.config.diarization:
-            diarizer = PyannoteDiarization(
-                self.config.diarization,
-            )
-            diar_result = diarizer.diarize(audio_path)
-
-            segments_text = []
-            for seg in diar_result.segments:
-                seg_text = self._find_text_for_segment(
-                    seg, asr_result.segments,
-                )
-                segments_text.append(
-                    f"[{seg.speaker}]: {seg_text}"
-                )
-            text = "\n".join(segments_text)
-
+        text = self.transcribe_audio_to_text(audio_path, use_diarization)
         return self.process_text(text)
 
     def process_text(self, text: str) -> SonarAgent:

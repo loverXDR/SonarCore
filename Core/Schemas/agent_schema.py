@@ -5,7 +5,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from .rag_schema import LLMConfig, IndexConfig
-from .asr_schema import ASRConfig
+from .asr_schema import ASRConfig, WhisperConfig
 from .diarization_schema import PyannoteConfig
 
 
@@ -14,7 +14,7 @@ class AgentConfig(BaseModel):
 
     llm: LLMConfig
     index: IndexConfig = Field(default_factory=IndexConfig)
-    asr: Optional[ASRConfig] = None
+    asr: Optional[ASRConfig] = WhisperConfig()
     diarization: Optional[PyannoteConfig] = None
     system_prompt: str = (
         "Ты — интеллектуальный ассистент, работающий "
