@@ -11,9 +11,24 @@ from .Schemas import (
     BaseSherpaConfig,
     SherpaParaformerConfig,
     SherpaTransducerConfig,
+    DocumentParserConfig,
+    EmbeddingConfig,
+    LLMConfig,
+    VectorStoreConfig,
+    IndexConfig,
+    QueryResult,
 )
 from .ASR import MainASR, WhisperASR, SherpaOfflineASR
 from .Diarization import PyannoteDiarization
+from .RAG_utils import (
+    BaseDocumentParser,
+    BaseIndexBuilder,
+    BaseQueryEngine,
+    LlamaDocumentParser,
+    SummaryIndexBuilder,
+    QAIndexBuilder,
+    LlamaQueryEngine,
+)
 
 __all__ = [
     "ASRConfig",
@@ -26,8 +41,21 @@ __all__ = [
     "BaseSherpaConfig",
     "SherpaParaformerConfig",
     "SherpaTransducerConfig",
+    "DocumentParserConfig",
+    "EmbeddingConfig",
+    "LLMConfig",
+    "VectorStoreConfig",
+    "IndexConfig",
+    "QueryResult",
     "MainASR",
     "WhisperASR",
     "SherpaOfflineASR",
     "PyannoteDiarization",
+    "BaseDocumentParser",
+    "BaseIndexBuilder",
+    "BaseQueryEngine",
+    "LlamaDocumentParser",
+    "SummaryIndexBuilder",
+    "QAIndexBuilder",
+    "LlamaQueryEngine",
 ]

@@ -11,6 +11,14 @@ from .sherpa_schema import (
     SherpaParaformerConfig,
     SherpaTransducerConfig,
 )
+from .rag_schema import (
+    DocumentParserConfig,
+    EmbeddingConfig,
+    LLMConfig,
+    VectorStoreConfig,
+    IndexConfig,
+    QueryResult,
+)
 
 __all__ = [
     "ASRConfig",
@@ -23,4 +31,10 @@ __all__ = [
     "BaseSherpaConfig",
     "SherpaParaformerConfig",
     "SherpaTransducerConfig",
+    "DocumentParserConfig",
+    "EmbeddingConfig",
+    "LLMConfig",
+    "VectorStoreConfig",
+    "IndexConfig",
+    "QueryResult",
 ]
