@@ -1,12 +1,16 @@
 """Summary index builder based on llama-index"""
 
-from typing import List
+from typing import Dict, List
 
 from llama_index.core import Document, SummaryIndex, Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 from Core.Schemas import IndexConfig
 from .base import BaseIndexBuilder
+
+# Process-level cache: avoids rebuilding in-memory summary indices for
+# content that was already processed during this server lifetime.
+_summary_cache: Dict[str, SummaryIndex] = {}
 
 
 class SummaryIndexBuilder(BaseIndexBuilder):
@@ -23,16 +27,28 @@ class SummaryIndexBuilder(BaseIndexBuilder):
             device=self.config.embedding.device,
         )
 
-    def build(self, documents: List[Document]) -> SummaryIndex:
-        """Build SummaryIndex from documents
+    def build(self, documents: List[Document], text_hash: str) -> SummaryIndex:
+        """Build or return cached SummaryIndex for the given content.
 
         Args:
-            documents (List[Document]): List of llama-index Documents or nodes
+            documents (List[Document]): Documents or nodes to index.
+            text_hash (str): Stable content identifier used as cache key.
 
         Returns:
-            SummaryIndex: Built summary index for summarization queries
+            SummaryIndex: In-memory summary index.
+
+        Raises:
+            RuntimeError: If index building fails.
         """
-        index = SummaryIndex(documents)
+        if text_hash in _summary_cache:
+            return _summary_cache[text_hash]
+
+        try:
+            index = SummaryIndex(documents)
+        except Exception as e:
+            raise RuntimeError(f"Failed to build summary index: {str(e)}")
+
+        _summary_cache[text_hash] = index
         return index
 
 

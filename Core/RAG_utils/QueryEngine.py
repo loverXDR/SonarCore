@@ -31,23 +31,23 @@ class LlamaQueryEngine(BaseQueryEngine):
     def query(
         self,
         query_text: str,
-        doc_id: Optional[str] = None,
+        text_hash: Optional[str] = None,
         **kwargs,
     ) -> QueryResult:
         """Execute a query against the index
 
         Args:
             query_text (str): Question to ask
-            doc_id (Optional[str]): Filter results by document ID
+            text_hash (Optional[str]): Filter results to nodes with this content hash.
 
         Returns:
             QueryResult: Response with source nodes
         """
         engine_kwargs = {}
 
-        if doc_id:
+        if text_hash:
             filters = MetadataFilters(
-                filters=[MetadataFilter(key="session_id", value=doc_id)]
+                filters=[MetadataFilter(key="text_hash", value=text_hash)]
             )
             engine_kwargs["filters"] = filters
 

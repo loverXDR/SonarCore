@@ -1,6 +1,8 @@
 """Pipeline orchestrator: audio -> ASR -> index -> agent"""
 
+import hashlib
 from typing import Optional
+
 from llama_index.core import Document
 
 from Core.Schemas import (
@@ -43,16 +45,25 @@ class SonarPipeline:
 
         Returns:
             tuple[str, list[dict]]: A tuple containing the full raw text and a list of segment dictionaries.
+
+        Raises:
+            RuntimeError: If ASR transcription fails or Qdrant indexing fails.
         """
-        asr = MainASR(self.config.asr)
-        asr_result = asr.transcribe(audio_path)
-        
+        try:
+            asr = MainASR(self.config.asr)
+            asr_result = asr.transcribe(audio_path)
+        except Exception as e:
+            raise RuntimeError(f"ASR transcription failed: {str(e)}")
+
         segments_out = []
         if use_diarization and self.config.diarization:
-            diarizer = PyannoteDiarization(
-                self.config.diarization,
-            )
-            diar_result = diarizer.diarize(audio_path)
+            try:
+                diarizer = PyannoteDiarization(
+                    self.config.diarization,
+                )
+                diar_result = diarizer.diarize(audio_path)
+            except Exception as e:
+                raise RuntimeError(f"Diarization failed: {str(e)}")
 
             for seg in diar_result.segments:
                 seg_text = self._find_text_for_segment(
@@ -123,40 +134,34 @@ class SonarPipeline:
         Returns:
             SonarAgent: Ready-to-chat agent
         """
+        # Stable content identifier: same text always yields the same hash,
+        # so Qdrant embeddings and the in-memory summary cache can be reused.
+        text_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
+
         parser = LlamaDocumentParser(
             DocumentParserConfig(
                 chunk_size=self.config.index.parser.chunk_size,
-                chunk_overlap=(
-                    self.config.index.parser.chunk_overlap
-                ),
+                chunk_overlap=self.config.index.parser.chunk_overlap,
             )
         )
         nodes = parser.parse_text(text)
-        
-        # Tag nodes with session_id for isolation
-        if session_id:
-            for node in nodes:
-                node.metadata["session_id"] = session_id
+
+        for node in nodes:
+            node.metadata["text_hash"] = text_hash
 
         qa_builder = QAIndexBuilder(self.config.index)
-        documents = [Document(text=text, metadata={"session_id": session_id} if session_id else {})]
-        qa_index = qa_builder.build(documents)
+        documents = [Document(text=text, metadata={"text_hash": text_hash})]
+        qa_index = qa_builder.build(documents, text_hash=text_hash)
 
-        summary_builder = SummaryIndexBuilder(
-            self.config.index,
-        )
-        summary_index = summary_builder.build(nodes)
+        summary_builder = SummaryIndexBuilder(self.config.index)
+        summary_index = summary_builder.build(nodes, text_hash=text_hash)
 
-        search_engine = LlamaQueryEngine(
-            qa_index, self.config.llm,
-        )
-        summary_engine = LlamaQueryEngine(
-            summary_index, self.config.llm,
-        )
+        search_engine = LlamaQueryEngine(qa_index, self.config.llm)
+        summary_engine = LlamaQueryEngine(summary_index, self.config.llm)
 
         tools = [
-            create_search_tool(search_engine, session_id=session_id),
-            create_summarize_tool(summary_engine, session_id=session_id),
+            create_search_tool(search_engine, text_hash=text_hash),
+            create_summarize_tool(summary_engine, text_hash=text_hash),
         ]
 
         return SonarAgent(

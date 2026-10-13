@@ -5,12 +5,12 @@ from langchain_core.tools import tool
 from Core.RAG_utils import LlamaQueryEngine
 
 
-def create_search_tool(engine: LlamaQueryEngine, session_id: str = None):
+def create_search_tool(engine: LlamaQueryEngine, text_hash: str = None):
     """Create a search tool bound to a specific query engine
 
     Args:
         engine (LlamaQueryEngine): Configured query engine
-        session_id (str, optional): Session ID for metadata filtering
+        text_hash (str, optional): Content hash for metadata filtering
 
     Returns:
         Callable: LangChain tool for document search
@@ -25,7 +25,7 @@ def create_search_tool(engine: LlamaQueryEngine, session_id: str = None):
         Args:
             query: Search query in natural language
         """
-        result = engine.query(query, doc_id=session_id)
+        result = engine.query(query, text_hash=text_hash)
         sources = "\n".join(
             f"[{s.get('score', 0):.2f}] {s['text'][:200]}"
             for s in result.source_nodes
@@ -35,13 +35,13 @@ def create_search_tool(engine: LlamaQueryEngine, session_id: str = None):
     return search_documents
 
 
-def create_summarize_tool(engine: LlamaQueryEngine, session_id: str = None):
+def create_summarize_tool(engine: LlamaQueryEngine, text_hash: str = None):
     """Create a summarization tool bound to a query engine
 
     Args:
         engine (LlamaQueryEngine): Configured query engine
             with SummaryIndex
-        session_id (str, optional): Session ID for metadata filtering
+        text_hash (str, optional): Content hash for metadata filtering
 
     Returns:
         Callable: LangChain tool for document summarization
@@ -56,7 +56,7 @@ def create_summarize_tool(engine: LlamaQueryEngine, session_id: str = None):
         Args:
             query: What aspect to summarize
         """
-        result = engine.query(query, doc_id=session_id)
+        result = engine.query(query, text_hash=text_hash)
         return result.response
 
     return summarize_documents

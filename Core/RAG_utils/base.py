@@ -25,8 +25,13 @@ class BaseIndexBuilder(ABC):
     """Base class for index building implementations"""
 
     @abstractmethod
-    def build(self, documents: List[Document]) -> VectorStoreIndex:
-        """Build index from list of Documents"""
+    def build(self, documents: List[Document], text_hash: str) -> VectorStoreIndex:
+        """Build index from list of Documents.
+
+        Args:
+            documents (List[Document]): Source documents or nodes.
+            text_hash (str): Stable SHA-256-derived content identifier.
+        """
         pass
 
 
