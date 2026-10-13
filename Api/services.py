@@ -9,7 +9,7 @@ import httpx
 import qdrant_client
 from fastapi.concurrency import run_in_threadpool
 
-from Core.Schemas import AgentConfig, AgentResponse, AgentMessage
+from Core.Schemas import AgentConfig, AgentResponse, AgentMessage, SummaryOptions
 from Agent_workflow.pipeline import SonarPipeline
 from Agent_workflow.agent import SonarAgent
 from .repositories import BaseSessionRepository
@@ -126,6 +126,26 @@ class AgentManager:
         
         response = await run_in_threadpool(record.agent.chat, message)
         return response
+
+    async def summarize(self, session_id: str, options: SummaryOptions) -> str:
+        """Generate a summary of the session document asynchronously.
+
+        Args:
+            session_id (str): Unique identifier of the session.
+            options (SummaryOptions): Summary language, style and size.
+
+        Raises:
+            ValueError: If the session ID doesn't exist.
+
+        Returns:
+            str: Generated summary text.
+        """
+        record = self.repository.get(session_id)
+        if not record:
+            raise ValueError(f"Session '{session_id}' not found")
+
+        response = await run_in_threadpool(record.agent.summarize, options)
+        return response.answer
 
     def get_all_sessions(self) -> List[SessionInfo]:
         """List all managed sessions as DTOs.

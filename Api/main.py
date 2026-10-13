@@ -25,6 +25,8 @@ from .schemas import (
     SessionListResponse,
     HealthCheckResponse,
     AsyncTaskResponse,
+    SummaryRequest,
+    SummaryResponse,
 )
 from Core.Schemas import AgentMessage
 from .services import AgentManager
@@ -162,6 +164,44 @@ async def chat_with_agent(
             answer=response.answer,
             sources=response.sources,
             history=response.history,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
+    "/sessions/{session_id}/summary",
+    response_model=SummaryResponse,
+    tags=["Summary"],
+)
+async def summarize_session(
+    session_id: str,
+    request: SummaryRequest,
+    manager: AgentManager = Depends(get_agent_manager),
+):
+    """Generate a summary of the session document with explicit parameters.
+
+    Args:
+        session_id (str): Unique identifier for the active session.
+        request (SummaryRequest): Summary language, style and size.
+        manager (AgentManager, optional): Dependency. Defaults to Depends(get_agent_manager).
+
+    Raises:
+        HTTPException: If the session is not found or generation fails.
+
+    Returns:
+        SummaryResponse: Generated summary with the applied parameters.
+    """
+    try:
+        summary = await manager.summarize(session_id=session_id, options=request)
+        return SummaryResponse(
+            summary=summary,
+            language=request.language,
+            style=request.style,
+            size=request.size,
+            comment=request.comment,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

@@ -4,7 +4,13 @@ from datetime import datetime
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 
-from Core.Schemas import AgentConfig, AgentMessage
+from Core.Schemas import (
+    AgentConfig,
+    AgentMessage,
+    SummaryOptions,
+    SummarySize,
+    SummaryStyle,
+)
 
 
 class ProcessAudioRequest(BaseModel):
@@ -69,6 +75,38 @@ class ChatMessageResponse(BaseModel):
     history: List[AgentMessage] = Field(
         default_factory=list, description="Conversation history"
     )
+
+
+class SummaryRequest(SummaryOptions):
+    """Request schema for generating a document summary.
+
+    Attributes:
+        language (str): ISO 639-1 language code of the summary.
+        style (SummaryStyle): Summary presentation style.
+        size (SummarySize): Target summary length.
+        comment (Optional[str]): Additional user instructions for the summary.
+    """
+
+
+class SummaryResponse(BaseModel):
+    """Response schema containing the generated summary.
+
+    Attributes:
+        summary (str): The generated summary text.
+        language (str): Language code used for generation.
+        style (SummaryStyle): Style used for generation.
+        size (SummarySize): Size used for generation.
+        comment (Optional[str]): Additional instructions used for generation.
+    """
+
+    summary: str = Field(description="Generated summary text")
+    language: str = Field(description="Language code of the summary")
+    style: SummaryStyle = Field(description="Summary presentation style")
+    size: SummarySize = Field(description="Target summary length")
+    comment: Optional[str] = Field(
+        default=None, description="Additional user instructions for the summary"
+    )
+
 
 class TranscriptionSegment(BaseModel):
     """A segment of transcribed audio with timestamps."""
