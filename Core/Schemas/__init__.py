@@ -19,7 +19,14 @@ from .rag_schema import (
     IndexConfig,
     QueryResult,
 )
-from .agent_schema import AgentConfig, AgentMessage, AgentResponse
+from .agent_schema import (
+    AgentConfig,
+    AgentMessage,
+    AgentResponse,
+    SummaryOptions,
+    SummarySize,
+    SummaryStyle,
+)
 
 __all__ = [
     "ASRConfig",
@@ -41,4 +48,7 @@ __all__ = [
     "AgentConfig",
     "AgentMessage",
     "AgentResponse",
+    "SummaryOptions",
+    "SummarySize",
+    "SummaryStyle",
 ]

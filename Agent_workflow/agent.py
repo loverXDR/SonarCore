@@ -14,7 +14,31 @@ from langchain_core.messages import (
 from langgraph.graph import StateGraph, START, END
 from typing_extensions import TypedDict
 
-from Core.Schemas import AgentConfig, AgentMessage, AgentResponse
+from Core.Schemas import (
+    AgentConfig,
+    AgentMessage,
+    AgentResponse,
+    SummaryOptions,
+)
+from .summary_prompts import build_summary_messages, get_material_query
+
+
+def _content_to_text(raw) -> str:
+    """Normalize message content to plain text
+
+    Some LLM backends return content as a list of blocks instead of a plain string.
+
+    Args:
+        raw: Message content (str or list of blocks)
+
+    Returns:
+        str: Plain text content
+    """
+    if isinstance(raw, str):
+        return raw
+    return " ".join(
+        b.get("text", "") if isinstance(b, dict) else str(b) for b in raw
+    )
 
 
 class AgentState(TypedDict):
@@ -209,11 +233,7 @@ class SonarAgent:
         if last_msg is None or isinstance(last_msg, HumanMessage):
             answer = "До свидания! Обращайтесь, если понадоблюсь."
         else:
-            raw = getattr(last_msg, "content", "")
-            # Some LLM backends return content as a list of blocks instead of a plain string
-            answer = raw if isinstance(raw, str) else " ".join(
-                b.get("text", "") if isinstance(b, dict) else str(b) for b in raw
-            )
+            answer = _content_to_text(getattr(last_msg, "content", ""))
 
         # Build history filtering out internal tool messages
         history = []
@@ -222,10 +242,7 @@ class SonarAgent:
                 continue
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 continue
-            raw = getattr(msg, "content", "")
-            content = raw if isinstance(raw, str) else " ".join(
-                b.get("text", "") if isinstance(b, dict) else str(b) for b in raw
-            )
+            content = _content_to_text(getattr(msg, "content", ""))
             if content:
                 role = "user" if isinstance(msg, HumanMessage) else "assistant"
                 history.append(AgentMessage(role=role, content=content))
@@ -235,6 +252,27 @@ class SonarAgent:
             sources=[],
             history=history,
         )
+
+    def summarize(self, options: SummaryOptions) -> AgentResponse:
+        """Generate a document summary with explicit parameters
+
+        Two-stage generation bypassing the supervisor:
+        1. Extract full document material via the summarize tool (SummaryIndex).
+        2. Compose the final summary with a localized style-specific prompt.
+        Conversation history is left untouched.
+
+        Args:
+            options (SummaryOptions): Summary language, style, size and comment
+
+        Returns:
+            AgentResponse: Generated summary
+        """
+        material = self.summarize_tool.invoke(
+            {"query": get_material_query(options.language)}
+        )
+        final = self._llm.invoke(build_summary_messages(options, str(material)))
+        answer = _content_to_text(getattr(final, "content", ""))
+        return AgentResponse(answer=answer, sources=[], history=[])
 
     def reset(self) -> None:
         """Reset conversation history"""
