@@ -2,7 +2,7 @@
 
 from Core.Schemas import AgentConfig, LLMConfig
 from .services import AgentManager
-from .repositories import InMemorySessionRepository
+from .repositories import SQLiteSessionRepository, SQLiteTaskRepository
 import os
 
 
@@ -24,8 +24,14 @@ def get_default_agent_config() -> AgentConfig:
 
 
 # Singleton repository and manager instances
-_session_repo = InMemorySessionRepository()
-_agent_manager = AgentManager(repository=_session_repo, default_config=get_default_agent_config())
+_db_path = os.getenv("SESSION_DB_PATH", "data/sonarcore.db")
+_session_repo = SQLiteSessionRepository(_db_path)
+_task_repo = SQLiteTaskRepository(_db_path)
+_agent_manager = AgentManager(
+    repository=_session_repo,
+    task_repository=_task_repo,
+    default_config=get_default_agent_config(),
+)
 
 
 def get_agent_manager() -> AgentManager:

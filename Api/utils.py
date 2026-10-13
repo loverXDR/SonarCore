@@ -1,10 +1,12 @@
 """Utility functions for API"""
 
 import os
+import shutil
 import uuid
 import httpx
 import tempfile
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 from fastapi import UploadFile, HTTPException
 
 
@@ -15,18 +17,18 @@ async def handle_audio_input(
     file_path: str = None,
 ):
     """
-    Context manager to handle audio input from multiple sources.
+    Context manager to handle audio or video input from multiple sources.
 
     Ensures that exactly one input method is provided and yields a local file path.
     Cleans up any downloaded or uploaded temporary files upon exiting.
 
     Args:
         file (UploadFile, optional): Uploaded multipart file. Defaults to None.
-        url (str, optional): Remote URL to an audio file. Defaults to None.
+        url (str, optional): Remote URL to an audio or video file. Defaults to None.
         file_path (str, optional): Local file path on the server. Defaults to None.
 
     Yields:
-        str: Absolute local file path to the audio file.
+        str: Absolute local file path to the audio or video file.
 
     Raises:
         HTTPException: If none or multiple inputs are provided, or on download/save errors.
@@ -47,15 +49,16 @@ async def handle_audio_input(
         elif file:
             temp_path = os.path.join(tempfile.gettempdir(), f"upload_{uuid.uuid4().hex}_{file.filename}")
             try:
+                # Stream to disk: video uploads can be too large to hold in memory
                 with open(temp_path, "wb") as buffer:
-                    content = await file.read()
-                    buffer.write(content)
+                    shutil.copyfileobj(file.file, buffer)
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Error saving uploaded file: {str(e)}")
             yield temp_path
 
         elif url:
-            temp_path = os.path.join(tempfile.gettempdir(), f"download_{uuid.uuid4().hex}.wav")
+            extension = os.path.splitext(urlparse(url).path)[1]
+            temp_path = os.path.join(tempfile.gettempdir(), f"download_{uuid.uuid4().hex}{extension}")
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.get(url, follow_redirects=True)

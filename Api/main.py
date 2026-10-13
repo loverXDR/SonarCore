@@ -6,13 +6,15 @@ import logging
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
 from typing import Optional, List
 
 import uvicorn
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi import UploadFile, File, Form
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from .schemas import (
     ProcessAudioRequest,
@@ -28,6 +30,8 @@ from .schemas import (
     SummaryRequest,
     SummaryResponse,
 )
+from Core.ASR import MainASR
+from Core.Diarization import MainDiarization
 from Core.Schemas import AgentMessage
 from .services import AgentManager
 from .dependencies import get_agent_manager
@@ -39,11 +43,31 @@ _STREAM_CHUNK_WORDS = 3
 _STREAM_CHUNK_DELAY = 0.02
 _PROGRESS_POLL_INTERVAL = 0.5
 _PROGRESS_TIMEOUT = 600
+_DOCX_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Init session storage and preload the default ASR and diarization models"""
+    manager = get_agent_manager()
+    await manager.init()
+    asr_config = manager.default_config.asr
+    if asr_config is not None:
+        logger.info("Preloading ASR model: %s", asr_config)
+        await run_in_threadpool(MainASR, asr_config)
+    diarization_config = manager.default_config.diarization
+    if diarization_config is not None:
+        logger.info("Preloading diarization model: %s", diarization_config)
+        await run_in_threadpool(MainDiarization, diarization_config)
+    yield
+
 
 app = FastAPI(
     title="SonarCore Agent API",
     description="Async API to interact with the multi-agent RAG workflow",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Configure CORS with explicit origins (wildcard + credentials is invalid per browser policy)
@@ -65,7 +89,7 @@ async def create_session_from_audio(
     request: ProcessAudioRequest,
     manager: AgentManager = Depends(get_agent_manager),
 ):
-    """Create a new agent session by processing an audio file.
+    """Create a new agent session by processing an audio or video file.
 
     Args:
         request (ProcessAudioRequest): HTTP Request containing audio details.
@@ -93,7 +117,7 @@ async def create_session_from_audio(
 @app.get("/sessions", response_model=SessionListResponse, tags=["Sessions"])
 async def list_sessions(manager: AgentManager = Depends(get_agent_manager)):
     """List all active agent sessions."""
-    return SessionListResponse(sessions=manager.get_all_sessions())
+    return SessionListResponse(sessions=await manager.get_all_sessions())
 
 
 @app.get("/sessions/{session_id}", response_model=SessionInfo, tags=["Sessions"])
@@ -102,7 +126,7 @@ async def get_session(
 ):
     """Get metadata for a specific session."""
     try:
-        return manager.get_session_details(session_id)
+        return await manager.get_session_details(session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -209,6 +233,44 @@ async def summarize_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/sessions/{session_id}/summary/docx", tags=["Summary"])
+async def export_summary_docx(
+    session_id: str,
+    request: SummaryRequest,
+    manager: AgentManager = Depends(get_agent_manager),
+):
+    """Generate a summary of the session document as a Word (.docx) file.
+
+    With style 'meeting_minutes' the file is a structured protocol: overview,
+    participants, agenda, discussion, decisions, action items table,
+    open questions and the transcript as an appendix.
+
+    Args:
+        session_id (str): Unique identifier for the active session.
+        request (SummaryRequest): Summary language, style and size.
+        manager (AgentManager, optional): Dependency. Defaults to Depends(get_agent_manager).
+
+    Raises:
+        HTTPException: If the session is not found or generation fails.
+
+    Returns:
+        Response: .docx file as an attachment.
+    """
+    try:
+        content = await manager.export_summary_docx(session_id=session_id, options=request)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    filename = f"{request.style.value}_{session_id[:8]}.docx"
+    return Response(
+        content=content,
+        media_type=_DOCX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.get("/sessions/{session_id}/stream", tags=["Chat"])
 async def stream_chat(
     session_id: str,
@@ -282,7 +344,7 @@ async def get_session_history(
 ):
     """Retrieve full conversation history for a session."""
     try:
-        return manager.get_session_history(session_id)
+        return await manager.get_session_history(session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -304,7 +366,7 @@ async def delete_session(
     Returns:
         dict: Success message.
     """
-    success = manager.delete_session(session_id)
+    success = await manager.delete_session(session_id)
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"message": "Session deleted"}
@@ -320,7 +382,7 @@ async def create_session_from_audio_async(
     background_tasks: BackgroundTasks,
     manager: AgentManager = Depends(get_agent_manager),
 ):
-    """Start audio session creation as a background task.
+    """Start audio/video session creation as a background task.
 
     Returns a ``task_id`` immediately. Poll ``GET /sessions/progress/{task_id}``
     via SSE to monitor progress.
@@ -343,7 +405,9 @@ async def create_session_from_audio_async(
 
 
 @app.get("/sessions/progress/{task_id}", tags=["Sessions"])
-async def get_session_progress(task_id: str):
+async def get_session_progress(
+    task_id: str, manager: AgentManager = Depends(get_agent_manager)
+):
     """Stream progress updates for an async session creation task via SSE.
 
     Emits a JSON event every ~500 ms until the task reaches ``ready`` or
@@ -359,7 +423,7 @@ async def get_session_progress(task_id: str):
     async def _progress_generator():
         elapsed = 0.0
         while elapsed < _PROGRESS_TIMEOUT:
-            progress = AgentManager.get_task_progress(task_id)
+            progress = await manager.get_task_progress(task_id)
 
             if progress is None:
                 payload = json.dumps({"type": "progress", "status": "queued", "pct": 0})
@@ -421,7 +485,7 @@ async def transcribe_audio(
     manager: AgentManager = Depends(get_agent_manager),
 ):
     """
-    Directly transcribe audio to text.
+    Directly transcribe audio (or the audio track of a video) to text.
 
     Accepts exactly one input method from (file, url, file_path).
 

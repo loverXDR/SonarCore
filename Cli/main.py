@@ -10,6 +10,7 @@ from Api.dependencies import get_agent_manager
 async def async_main():
     """Main asynchronous loop for the CLI interface."""
     manager = get_agent_manager()
+    await manager.init()
     
     while True:
         print("\n=== SonarCore CLI ===")
@@ -123,7 +124,7 @@ async def chat_loop(manager, session_id: str):
     # Optionally delete the session when leaving the chat to save memory
     del_input = input("Delete this session from memory? (Y/n): ").strip().lower()
     if del_input not in ['n', 'no']:
-        manager.delete_session(session_id)
+        await manager.delete_session(session_id)
         print("Session deleted.")
 
 

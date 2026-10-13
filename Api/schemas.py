@@ -14,15 +14,15 @@ from Core.Schemas import (
 
 
 class ProcessAudioRequest(BaseModel):
-    """Request schema for creating a session from an audio file.
+    """Request schema for creating a session from an audio or video file.
 
     Attributes:
-        audio_path (str): The local path to the audio file to process.
+        audio_path (str): The local path to the audio or video file to process.
         use_diarization (bool): Flag indicating whether to perform speaker diarization.
         config (Optional[AgentConfig]): Optional override configuration for the pipeline.
     """
 
-    audio_path: str = Field(description="Path to the audio file on the server")
+    audio_path: str = Field(description="Path to the audio or video file on the server")
     use_diarization: bool = Field(
         default=False, description="Whether to use speaker diarization"
     )
