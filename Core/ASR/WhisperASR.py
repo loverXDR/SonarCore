@@ -3,7 +3,7 @@
 import dataclasses
 from typing import Iterable, Tuple
 from faster_whisper import WhisperModel
-from Core.Schemas import ASRResult, ASRSegment, WhisperConfig
+from Core.Schemas import ASRResult, ASRSegment, ASRWord, WhisperConfig
 
 
 from .base import BaseASR
@@ -18,6 +18,9 @@ class WhisperASR(BaseASR):
             model_size_or_path=self.config.model_size,
             device=self.config.device,
             compute_type=self.config.compute_type,
+            cpu_threads=self.config.cpu_threads,
+            num_workers=self.config.num_workers,
+            download_root=self.config.download_root,
         )
 
     def transcribe(self, audio_path: str) -> ASRResult:
@@ -32,15 +35,32 @@ class WhisperASR(BaseASR):
 
         transcription_list, transcription_info = self.model.transcribe(
             audio_path,
-            beam_size=self.config.beam_size,
             language=self.config.lang,
+            task=self.config.task,
+            beam_size=self.config.beam_size,
+            best_of=self.config.best_of,
+            temperature=self.config.temperature,
+            initial_prompt=self.config.prompt,
+            hotwords=self.config.hotwords,
+            max_new_tokens=self.config.max_new_tokens,
+            condition_on_previous_text=self.config.condition_on_previous_text,
+            no_speech_threshold=self.config.no_speech_threshold,
+            vad_filter=self.config.vad_filter,
+            vad_parameters=self.config.vad_parameters,
+            word_timestamps=self.config.word_timestamps,
         )
 
         segments = []
         full_text = ""
         for segment in transcription_list:
+            words = [
+                ASRWord(start=word.start, end=word.end, text=word.word)
+                for word in segment.words or []
+            ]
             segments.append(
-                ASRSegment(start=segment.start, end=segment.end, text=segment.text)
+                ASRSegment(
+                    start=segment.start, end=segment.end, text=segment.text, words=words
+                )
             )
             full_text += segment.text
 

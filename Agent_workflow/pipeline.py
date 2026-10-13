@@ -10,7 +10,8 @@ from Core.Schemas import (
     DocumentParserConfig,
 )
 from Core.ASR import MainASR
-from Core.Diarization import PyannoteDiarization
+from Core.Diarization import MainDiarization
+from Core.Utils import prepared_audio
 from Core.RAG_utils import (
     LlamaDocumentParser,
     QAIndexBuilder,
@@ -40,14 +41,32 @@ class SonarPipeline:
         """Transcribe and return (text, segments) with timestamps.
 
         Args:
-            audio_path (str): Path to audio file.
+            audio_path (str): Path to audio or video file.
             use_diarization (bool, optional): Whether to apply speaker diarization. Defaults to False.
 
         Returns:
             tuple[str, list[dict]]: A tuple containing the full raw text and a list of segment dictionaries.
 
         Raises:
-            RuntimeError: If ASR transcription fails or Qdrant indexing fails.
+            RuntimeError: If audio extraction, ASR transcription or diarization fails.
+        """
+        # Every backend gets the same 16 kHz mono wav, whatever the input container
+        with prepared_audio(audio_path) as wav_path:
+            return self._process_wav_segments(wav_path, use_diarization)
+
+    def _process_wav_segments(
+        self,
+        audio_path: str,
+        use_diarization: bool,
+    ) -> tuple[str, list[dict]]:
+        """Run ASR and optional diarization on a prepared wav file.
+
+        Args:
+            audio_path (str): Path to 16 kHz mono wav file.
+            use_diarization (bool): Whether to apply speaker diarization.
+
+        Returns:
+            tuple[str, list[dict]]: A tuple containing the full raw text and a list of segment dictionaries.
         """
         try:
             asr = MainASR(self.config.asr)
@@ -58,22 +77,38 @@ class SonarPipeline:
         segments_out = []
         if use_diarization and self.config.diarization:
             try:
-                diarizer = PyannoteDiarization(
+                diarizer = MainDiarization(
                     self.config.diarization,
                 )
                 diar_result = diarizer.diarize(audio_path)
             except Exception as e:
                 raise RuntimeError(f"Diarization failed: {str(e)}")
 
-            for seg in diar_result.segments:
-                seg_text = self._find_text_for_segment(
-                    seg, asr_result.segments,
+            # Assign speakers word by word when the ASR backend returns word
+            # timestamps, otherwise fall back to whole segments
+            # (words keep their own leading spaces, segments are joined with one)
+            units = [
+                (unit, piece)
+                for seg in asr_result.segments
+                for unit, piece in (
+                    [(word, word.text) for word in seg.words]
+                    or [(seg, " " + seg.text.strip())]
                 )
+            ]
+            for unit, piece in units:
+                speaker = self._find_speaker_for_segment(
+                    unit, diar_result.segments,
+                )
+                # Merge consecutive units of the same speaker into one turn
+                if segments_out and segments_out[-1]["speaker"] == speaker:
+                    segments_out[-1]["end"] = unit.end
+                    segments_out[-1]["text"] += piece
+                    continue
                 segments_out.append({
-                    "start": seg.start,
-                    "end": seg.end,
-                    "text": seg_text,
-                    "speaker": seg.speaker
+                    "start": unit.start,
+                    "end": unit.end,
+                    "text": piece.strip(),
+                    "speaker": speaker
                 })
             text = "\n".join(f"[{s['speaker']}]: {s['text']}" for s in segments_out)
         else:
@@ -171,22 +206,38 @@ class SonarPipeline:
         )
 
     @staticmethod
-    def _find_text_for_segment(diar_seg, asr_segments):
-        """Match diarization segment to ASR text
+    def _find_speaker_for_segment(asr_seg, diar_segments):
+        """Match ASR segment (or word) to the speaker who talks most during it
 
         Args:
-            diar_seg: Diarization segment with timing
-            asr_segments: List of ASR segments
+            asr_seg: ASR segment or word with timing
+            diar_segments: List of diarization segments
 
         Returns:
-            str: Combined text for the time range
+            Optional[str]: Speaker with the largest time overlap, or the speaker
+                of the nearest diarization segment if none overlaps
         """
-        texts = []
-        for asr_seg in asr_segments:
+        if not diar_segments:
+            return None
+
+        overlaps = {}
+        for diar_seg in diar_segments:
             overlap_start = max(
                 diar_seg.start, asr_seg.start,
             )
             overlap_end = min(diar_seg.end, asr_seg.end)
             if overlap_end > overlap_start:
-                texts.append(asr_seg.text)
-        return " ".join(texts) if texts else ""
+                overlaps[diar_seg.speaker] = (
+                    overlaps.get(diar_seg.speaker, 0.0) + overlap_end - overlap_start
+                )
+        if overlaps:
+            return max(overlaps, key=overlaps.get)
+
+        center = (asr_seg.start + asr_seg.end) / 2
+        nearest = min(
+            diar_segments,
+            key=lambda diar_seg: min(
+                abs(center - diar_seg.start), abs(center - diar_seg.end),
+            ),
+        )
+        return nearest.speaker
