@@ -1,5 +1,8 @@
 import torch
-from pyannote.audio import Pipeline
+
+# from pyannote.audio import Pipeline
+
+
 
 from Core.Schemas import (
     DiarizationResult,
@@ -9,6 +12,7 @@ from Core.Schemas import (
 
 from .base import BaseDiarization
 
+Pipeline = None
 
 class PyannoteDiarization(BaseDiarization):
     """Pyannote Diarization implementation"""

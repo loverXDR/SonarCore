@@ -27,9 +27,16 @@ class AgentState(TypedDict):
 class Route(BaseModel):
     """Routing decision for the supervisor"""
 
-    next: Literal["qa", "summarize", "FINISH"] = Field(
+    next: Literal["qa", "summarize", "chat", "FINISH"] = Field(
         ...,
-        description="The next agent to route to, or FINISH if the user request is complete or cannot be handled.",
+        description=(
+            "The next agent to route to. "
+            "Use 'qa' for specific questions about the document content. "
+            "Use 'summarize' for summaries, key points, or meeting minutes. "
+            "Use 'chat' for greetings, small talk, questions about the conversation history, "
+            "or anything that does not require searching the document. "
+            "Use 'FINISH' ONLY when the user explicitly ends the conversation (e.g. 'goodbye', 'bye')."
+        ),
     )
 
 
@@ -68,14 +75,16 @@ class SonarAgent:
         # 1. Supervisor Node
         def supervisor_node(state: AgentState):
             supervisor_prompt = (
-                "Ты — маршрутизатор (Supervisor). У тебя есть два агента-исполнителя:\n"
-                "1) 'qa' — для ответа на конкретные вопросы по тексту/записи.\n"
-                "2) 'summarize' — для создания саммари, конспектов, выделения главных тем.\n"
-                "Текст документа УЖЕ ЗАГРУЖЕН в базу знаний, агентам не нужно его запрашивать.\n"
-                "Проанализируй запрос пользователя (последнее сообщение) и реши, кому передать задачу.\n"
-                "Если пользователь просто здоровается или диалог завершен, верни 'FINISH'."
+                "Ты — маршрутизатор. Все запросы связаны с загруженным документом/аудиозаписью.\n"
+                "Агенты-исполнители:\n"
+                "1) 'qa' — вопросы по содержанию документа, уточнения, поиск информации в тексте. "
+                "Используй по умолчанию для любого вопроса о документе.\n"
+                "2) 'summarize' — создание саммари, конспектов, списков ключевых тем, протоколов.\n"
+                "3) 'chat' — ТОЛЬКО: приветствия ('привет', 'добрый день') "
+                "и вопросы о ходе нашего диалога ('о чём мы говорили?', 'что ты уже ответил?').\n"
+                "Текст документа уже загружен. "
+                "'FINISH' — только если пользователь явно прощается ('пока', 'до свидания', 'спасибо, всё')."
             )
-            # Use structured output for guaranteed routing
             router = self._llm.with_structured_output(Route)
             messages = [SystemMessage(content=supervisor_prompt)] + state["messages"]
             decision = router.invoke(messages)
@@ -131,28 +140,46 @@ class SonarAgent:
 
             return {"messages": [response]}
 
+        # 4. Chat Node — greetings and meta-questions about the conversation only.
+        # Must stay grounded to the loaded document context.
+        def chat_node(state: AgentState):
+            system = SystemMessage(
+                content="Ты — SonarAI, ассистент для работы с загруженным документом или аудиозаписью.\n"
+                "Твоя единственная специализация — помогать пользователю разобраться в загруженном тексте.\n"
+                "Правила:\n"
+                "• Если пользователь здоровается — поздоровайся и предложи задать вопрос по документу.\n"
+                "• Если спрашивает о нашем диалоге — кратко перескажи, что уже обсуждалось.\n"
+                "• Если пишет что-то не связанное с документом — вежливо верни разговор к тексту.\n"
+                "• НЕ отвечай на вопросы, не касающиеся загруженного документа.\n"
+                "• НЕ выдумывай информацию вне контекста документа.\n"
+                "Отвечай на языке пользователя."
+            )
+            response = self._llm.invoke([system] + state["messages"])
+            return {"messages": [response]}
+
         # Graph Construction
         builder = StateGraph(AgentState)
         builder.add_node("supervisor", supervisor_node)
         builder.add_node("qa", qa_node)
         builder.add_node("summarize", summarize_node)
+        builder.add_node("chat", chat_node)
 
         builder.add_edge(START, "supervisor")
 
-        # Routing from supervisor
         builder.add_conditional_edges(
             "supervisor",
             lambda x: x["next"],
             {
                 "qa": "qa",
                 "summarize": "summarize",
+                "chat": "chat",
                 "FINISH": END,
             },
         )
 
-        # After worker finishes, go back to END (simple star topology for 1-turn interactions)
         builder.add_edge("qa", END)
         builder.add_edge("summarize", END)
+        builder.add_edge("chat", END)
 
         return builder.compile()
 
@@ -175,30 +202,33 @@ class SonarAgent:
         new_messages = result["messages"]
         self._history = new_messages
 
-        # The last message is the final answer from QA or Summarize node
-        assistant_msg = new_messages[-1]
-        
-        # If supervisor routed to FINISH directly without producing a new AIMessage
-        if isinstance(assistant_msg, HumanMessage):
-             answer = "Что я могу еще для вас сделать?"
+        # Extract the answer from the last message produced by a worker node.
+        # When supervisor routes to FINISH with no worker invoked, the last message
+        # is the HumanMessage the user just sent — fall back to a closing line.
+        last_msg = new_messages[-1] if new_messages else None
+        if last_msg is None or isinstance(last_msg, HumanMessage):
+            answer = "До свидания! Обращайтесь, если понадоблюсь."
         else:
-             answer = assistant_msg.content
+            raw = getattr(last_msg, "content", "")
+            # Some LLM backends return content as a list of blocks instead of a plain string
+            answer = raw if isinstance(raw, str) else " ".join(
+                b.get("text", "") if isinstance(b, dict) else str(b) for b in raw
+            )
 
-        # Since we squashed tool execution in the node, 
-        # let's just use the history to build AgentMessages
+        # Build history filtering out internal tool messages
         history = []
         for msg in new_messages:
-            if isinstance(msg, HumanMessage):
-                role = "user"
-            elif isinstance(msg, ToolMessage):
+            if isinstance(msg, ToolMessage):
                 continue
-            elif hasattr(msg, "tool_calls") and msg.tool_calls:
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
                 continue
-            else:
-                role = "assistant"
-            history.append(
-                AgentMessage(role=role, content=msg.content)
+            raw = getattr(msg, "content", "")
+            content = raw if isinstance(raw, str) else " ".join(
+                b.get("text", "") if isinstance(b, dict) else str(b) for b in raw
             )
+            if content:
+                role = "user" if isinstance(msg, HumanMessage) else "assistant"
+                history.append(AgentMessage(role=role, content=content))
 
         return AgentResponse(
             answer=answer,
