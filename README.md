@@ -6,7 +6,7 @@ This service processes meeting and call recordings to extract meaningful informa
 ## Technologies Used
 
 - **Framework**: FastAPI for asynchronous REST API handling.
-- **ASR (Speech Recognition)**: `faster-whisper`.
+- **ASR (Speech Recognition)**: `faster-whisper`, `sherpa-onnx`, `Qwen3-ASR` (`pip install -e .[qwen]`, `ASR_BACKEND=qwen`).
 - **Speaker Diarization**: `pyannote.audio`.
 - **LLM Orchestration**: LangGraph and LangChain for multi-agent workflows (QA and Summarization).
 - **RAG & Indexing**: LlamaIndex for document chunking and semantic search.

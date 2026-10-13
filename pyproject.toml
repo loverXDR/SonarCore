@@ -19,17 +19,24 @@ dependencies = [
     "llama-index",
     "llama-index-core",
     "llama-index-llms-openai",
+    "llama-index-llms-openai-like",
     "llama-index-embeddings-huggingface",
     "llama-index-vector-stores-qdrant",
     "qdrant-client",
     "python-dotenv",
     "pydantic",
     "httpx",
+    "aiosqlite",
+    "python-docx",
     "av",
     "torch>=2.0.0",
     "torchaudio>=2.0.0",
     "sherpa-onnx"
 ]
+
+[project.optional-dependencies]
+qwen = ["qwen-asr"]
+nemotron = ["transformers>=5.19.0", "librosa"]
 
 [project.scripts]
 sonar-cli = "Cli.main:main"
