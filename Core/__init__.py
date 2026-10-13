@@ -7,6 +7,7 @@ from .Schemas import (
     WhisperConfig,
     DiarizationResult,
     DiarizationSegment,
+    NemotronDiarizationConfig,
     PyannoteConfig,
     BaseSherpaConfig,
     SherpaParaformerConfig,
@@ -19,7 +20,7 @@ from .Schemas import (
     QueryResult,
 )
 from .ASR import MainASR, WhisperASR, SherpaOfflineASR
-from .Diarization import PyannoteDiarization
+from .Diarization import MainDiarization, PyannoteDiarization
 from .RAG_utils import (
     BaseDocumentParser,
     BaseIndexBuilder,
@@ -37,6 +38,7 @@ __all__ = [
     "WhisperConfig",
     "DiarizationResult",
     "DiarizationSegment",
+    "NemotronDiarizationConfig",
     "PyannoteConfig",
     "BaseSherpaConfig",
     "SherpaParaformerConfig",
@@ -50,6 +52,7 @@ __all__ = [
     "MainASR",
     "WhisperASR",
     "SherpaOfflineASR",
+    "MainDiarization",
     "PyannoteDiarization",
     "BaseDocumentParser",
     "BaseIndexBuilder",

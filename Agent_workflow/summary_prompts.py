@@ -1,10 +1,11 @@
 """Localized prompt catalog for parametrized document summarization"""
 
+import json
 from typing import Dict, List, NamedTuple
 
 from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 
-from Core.Schemas import SummaryOptions, SummarySize, SummaryStyle
+from Core.Schemas import MeetingMinutes, SummaryOptions, SummarySize, SummaryStyle
 
 
 class _PromptSet(NamedTuple):
@@ -12,6 +13,7 @@ class _PromptSet(NamedTuple):
 
     material_query: str
     base_rules: str
+    minutes: str
     styles: Dict[SummaryStyle, str]
     sizes: Dict[SummarySize, str]
     language_rule: str
@@ -33,6 +35,24 @@ _RU = _PromptSet(
         "• Не пиши вступлений и заключений вроде «Вот саммари» или «Надеюсь, это поможет» — сразу результат.\n"
         "• Если для обязательного раздела нет данных, пиши «не указано».\n"
         "• Используй Markdown-разметку там, где это предусмотрено форматом."
+    ),
+    minutes=(
+        "Ты — секретарь, составляющий официальный протокол встречи по её стенограмме.\n"
+        "Задача: заполнить поля протокола строго по материалу.\n"
+        "Правила:\n"
+        "• Используй ТОЛЬКО факты из материала. Ничего не выдумывай и не додумывай.\n"
+        "• Сохраняй точные имена, цифры, даты и термины.\n"
+        "• Участники — по меткам спикеров вида `[SPEAKER_XX]`; если из реплик понятно имя или роль "
+        "спикера, укажи их, иначе оставь пустыми.\n"
+        "• В остальных полях называй людей по имени, если оно известно, иначе по метке спикера.\n"
+        "• Повестка — отдельные обсуждавшиеся вопросы в порядке их появления, без дублей.\n"
+        "• Решения — только то, о чём участники явно договорились.\n"
+        "• Поручения — только явно поставленные задачи; срок и ответственного указывай, "
+        "только если они прозвучали.\n"
+        "• Повестка — темы, которые реально обсуждались, даже если встреча неформальная. "
+        "Пустыми оставляй только списки, для которых в материале действительно ничего нет.\n"
+        "• Пиши сплошным текстом без Markdown-разметки.\n\n"
+        "Ответ — JSON строго по схеме (что писать в каждом поле — в description):\n{schema}"
     ),
     styles={
         SummaryStyle.BRIEF: (
@@ -105,6 +125,24 @@ _EN = _PromptSet(
         "• Do not add intros or outros like \"Here is the summary\" or \"Hope this helps\" — output the result directly.\n"
         "• If a required section has no data, write \"not specified\".\n"
         "• Use Markdown where the format calls for it."
+    ),
+    minutes=(
+        "You are a secretary drafting official meeting minutes from a meeting transcript.\n"
+        "Task: fill in the minutes fields strictly from the material.\n"
+        "Rules:\n"
+        "• Use ONLY facts from the material. Do not invent or assume anything.\n"
+        "• Preserve exact names, figures, dates and terms.\n"
+        "• Participants come from speaker labels like `[SPEAKER_XX]`; if a speaker's name or role "
+        "is clear from the lines, fill it in, otherwise leave it empty.\n"
+        "• In the other fields refer to people by name when known, otherwise by speaker label.\n"
+        "• Agenda — separate discussed items in the order they appear, without duplicates.\n"
+        "• Decisions — only what participants explicitly agreed on.\n"
+        "• Action items — only explicitly assigned tasks; give an owner and a deadline "
+        "only if they were stated.\n"
+        "• Agenda — topics that were actually discussed, even if the meeting is informal. "
+        "Leave a list empty only if the material really has nothing for it.\n"
+        "• Write plain text without Markdown.\n\n"
+        "Answer with JSON strictly following the schema (see each field's description):\n{schema}"
     ),
     styles={
         SummaryStyle.BRIEF: (
@@ -210,6 +248,34 @@ def build_summary_messages(options: SummaryOptions, material: str) -> List[AnyMe
     system = "\n\n".join([
         prompts.styles[options.style],
         prompts.base_rules,
+        prompts.sizes[options.size],
+        prompts.language_rule.format(language=options.language),
+    ])
+
+    human = f"{prompts.material_header}\n<material>\n{material}\n</material>"
+    if options.comment and options.comment.strip():
+        human += f"\n\n{prompts.comment_header}\n<comment>\n{options.comment.strip()}\n</comment>"
+
+    return [SystemMessage(content=system), HumanMessage(content=human)]
+
+
+def build_minutes_messages(options: SummaryOptions, material: str) -> List[AnyMessage]:
+    """Build LLM messages that extract structured meeting minutes from the material
+
+    Args:
+        options (SummaryOptions): Minutes language, size and comment (style is ignored)
+        material (str): Meeting transcript or full document material
+
+    Returns:
+        List[AnyMessage]: System and human messages for the structured LLM call
+    """
+    prompts = _get_prompt_set(options.language)
+
+    # Guided decoding only constrains the JSON shape: field descriptions
+    # reach the model only through the prompt
+    schema = json.dumps(MeetingMinutes.model_json_schema(), ensure_ascii=False)
+    system = "\n\n".join([
+        prompts.minutes.format(schema=schema),
         prompts.sizes[options.size],
         prompts.language_rule.format(language=options.language),
     ])

@@ -26,6 +26,8 @@ class LLMConfig(BaseModel):
     api_base: str
     api_key: str
     model: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    context_window: int = int(os.getenv("LLM_CONTEXT_WINDOW", "32768"))
+    timeout: float = float(os.getenv("LLM_TIMEOUT", "3600"))
 
 
 class VectorStoreConfig(BaseModel):

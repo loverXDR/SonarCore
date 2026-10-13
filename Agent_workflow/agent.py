@@ -1,7 +1,7 @@
 """LangGraph multi-agent orchestration for RAG-based document chat"""
 
 import operator
-from typing import List, Annotated, Literal
+from typing import List, Annotated, Literal, Optional
 
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -18,9 +18,18 @@ from Core.Schemas import (
     AgentConfig,
     AgentMessage,
     AgentResponse,
+    MeetingMinutes,
     SummaryOptions,
 )
-from .summary_prompts import build_summary_messages, get_material_query
+from .summary_prompts import (
+    build_minutes_messages,
+    build_summary_messages,
+    get_material_query,
+)
+
+# Rough chars-per-token ratio used to decide whether a transcript fits
+# into half of the LLM context window (the rest is left for the prompt and output)
+_CHARS_PER_TOKEN = 3
 
 
 def _content_to_text(raw) -> str:
@@ -273,6 +282,34 @@ class SonarAgent:
         final = self._llm.invoke(build_summary_messages(options, str(material)))
         answer = _content_to_text(getattr(final, "content", ""))
         return AgentResponse(answer=answer, sources=[], history=[])
+
+    def meeting_minutes(
+        self,
+        options: SummaryOptions,
+        transcript: Optional[str] = None,
+    ) -> MeetingMinutes:
+        """Extract structured meeting minutes
+
+        The full transcript is used when it fits into the context window, so
+        speaker labels and the order of the discussion are preserved. Otherwise
+        the material is extracted via the summarize tool (SummaryIndex).
+
+        Args:
+            options (SummaryOptions): Minutes language, size and comment
+            transcript (str, optional): Source transcript of the session
+
+        Returns:
+            MeetingMinutes: Structured minutes
+        """
+        max_chars = self.config.llm.context_window * _CHARS_PER_TOKEN // 2
+        if transcript and len(transcript) <= max_chars:
+            material = transcript
+        else:
+            material = str(self.summarize_tool.invoke(
+                {"query": get_material_query(options.language)}
+            ))
+        extractor = self._llm.with_structured_output(MeetingMinutes)
+        return extractor.invoke(build_minutes_messages(options, material))
 
     def reset(self) -> None:
         """Reset conversation history"""

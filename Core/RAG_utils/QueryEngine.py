@@ -6,7 +6,7 @@ from typing import Optional
 
 from llama_index.core import VectorStoreIndex, Settings
 from llama_index.core.vector_stores import MetadataFilter, MetadataFilters
-from llama_index.llms.openai import OpenAI
+from llama_index.llms.openai_like import OpenAILike
 
 from Core.Schemas import LLMConfig, QueryResult
 from .base import BaseQueryEngine
@@ -22,10 +22,14 @@ class LlamaQueryEngine(BaseQueryEngine):
 
     def _configure_llm(self) -> None:
         """Configure LLM in llama-index Settings"""
-        Settings.llm = OpenAI(
+        # OpenAILike accepts any model name served by an OpenAI-compatible API (vLLM, etc.)
+        Settings.llm = OpenAILike(
             model=self.llm_config.model,
             api_base=self.llm_config.api_base,
             api_key=self.llm_config.api_key,
+            context_window=self.llm_config.context_window,
+            timeout=self.llm_config.timeout,
+            is_chat_model=True,
         )
 
     def query(
