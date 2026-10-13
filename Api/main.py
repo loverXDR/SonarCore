@@ -1,7 +1,18 @@
 """Main FastAPI application for SonarCore"""
 
+import asyncio
+import json
+import logging
+import os
+import time
+import uuid
+from typing import Optional, List
+
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
+from fastapi import UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from .schemas import (
     ProcessAudioRequest,
@@ -13,19 +24,35 @@ from .schemas import (
     SessionInfo,
     SessionListResponse,
     HealthCheckResponse,
+    AsyncTaskResponse,
 )
 from Core.Schemas import AgentMessage
 from .services import AgentManager
 from .dependencies import get_agent_manager
 from .utils import handle_audio_input
-from typing import Optional, List
-import time
-from fastapi import UploadFile, File, Form, Query
+
+logger = logging.getLogger(__name__)
+
+_STREAM_CHUNK_WORDS = 3
+_STREAM_CHUNK_DELAY = 0.02
+_PROGRESS_POLL_INTERVAL = 0.5
+_PROGRESS_TIMEOUT = 600
 
 app = FastAPI(
     title="SonarCore Agent API",
     description="Async API to interact with the multi-agent RAG workflow",
     version="1.0.0",
+)
+
+# Configure CORS with explicit origins (wildcard + credentials is invalid per browser policy)
+allow_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Cache-Control", "X-Accel-Buffering", "Content-Type"],
 )
 
 start_time = time.time()
@@ -142,6 +169,69 @@ async def chat_with_agent(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/sessions/{session_id}/stream", tags=["Chat"])
+async def stream_chat(
+    session_id: str,
+    message: str = Query(..., description="User message to send to the agent"),
+    manager: AgentManager = Depends(get_agent_manager),
+):
+    """Stream a chat response as Server-Sent Events.
+
+    The agent is invoked in a background thread. Once the full answer is
+    available it is split into word-level chunks and streamed to the client
+    with a short delay between each chunk for smooth UX.
+
+    SSE event types:
+        * ``token``  -- partial answer text
+        * ``done``   -- final payload with sources and history
+        * ``error``  -- on failure
+    """
+
+    async def _event_generator():
+        try:
+            # Run the synchronous agent.chat in a thread so we don't block
+            response = await manager.chat(session_id=session_id, message=message)
+
+            # Split answer into small chunks for fake token streaming
+            words = response.answer.split()
+            for i in range(0, len(words), _STREAM_CHUNK_WORDS):
+                chunk = " ".join(words[i : i + _STREAM_CHUNK_WORDS])
+                # Add trailing space unless this is the last chunk
+                if i + _STREAM_CHUNK_WORDS < len(words):
+                    chunk += " "
+                payload = json.dumps({"type": "token", "content": chunk}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
+                await asyncio.sleep(_STREAM_CHUNK_DELAY)
+
+            # Final event with metadata
+            done_payload = json.dumps(
+                {
+                    "type": "done",
+                    "sources": response.sources,
+                    "history": [m.model_dump() for m in response.history],
+                },
+                ensure_ascii=False,
+            )
+            yield f"data: {done_payload}\n\n"
+
+        except ValueError as exc:
+            error_payload = json.dumps({"type": "error", "detail": str(exc)})
+            yield f"data: {error_payload}\n\n"
+        except Exception as exc:
+            logger.exception("Streaming chat error for session %s", session_id)
+            error_payload = json.dumps({"type": "error", "detail": str(exc)})
+            yield f"data: {error_payload}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.get(
     "/sessions/{session_id}/history",
     response_model=List[AgentMessage],
@@ -178,6 +268,108 @@ async def delete_session(
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"message": "Session deleted"}
+
+
+@app.post(
+    "/sessions/audio/async",
+    response_model=AsyncTaskResponse,
+    tags=["Sessions"],
+)
+async def create_session_from_audio_async(
+    request: ProcessAudioRequest,
+    background_tasks: BackgroundTasks,
+    manager: AgentManager = Depends(get_agent_manager),
+):
+    """Start audio session creation as a background task.
+
+    Returns a ``task_id`` immediately. Poll ``GET /sessions/progress/{task_id}``
+    via SSE to monitor progress.
+    """
+    task_id = str(uuid.uuid4())
+
+    async def _run_task() -> None:
+        try:
+            await manager.create_session_from_audio(
+                audio_path=request.audio_path,
+                use_diarization=request.use_diarization,
+                config=request.config,
+                task_id=task_id,
+            )
+        except Exception:
+            logger.exception("Background audio processing failed for task %s", task_id)
+
+    background_tasks.add_task(_run_task)
+    return AsyncTaskResponse(task_id=task_id, message="Processing started. Poll progress via SSE.")
+
+
+@app.get("/sessions/progress/{task_id}", tags=["Sessions"])
+async def get_session_progress(task_id: str):
+    """Stream progress updates for an async session creation task via SSE.
+
+    Emits a JSON event every ~500 ms until the task reaches ``ready`` or
+    ``error`` status, or until the timeout is exceeded.
+
+    SSE event types:
+        * ``progress`` -- intermediate status with ``pct`` field
+        * ``ready``    -- final event containing the ``session_id``
+        * ``error``    -- task failed; ``detail`` field has info
+        * ``timeout``  -- server gave up waiting
+    """
+
+    async def _progress_generator():
+        elapsed = 0.0
+        while elapsed < _PROGRESS_TIMEOUT:
+            progress = AgentManager.get_task_progress(task_id)
+
+            if progress is None:
+                payload = json.dumps({"type": "progress", "status": "queued", "pct": 0})
+                yield f"data: {payload}\n\n"
+            elif progress.get("status") == "ready":
+                payload = json.dumps(
+                    {
+                        "type": "ready",
+                        "status": "ready",
+                        "pct": 100,
+                        "session_id": progress["session_id"],
+                    }
+                )
+                yield f"data: {payload}\n\n"
+                return
+            elif progress.get("status") == "error":
+                payload = json.dumps(
+                    {
+                        "type": "error",
+                        "status": "error",
+                        "detail": progress.get("detail", "Unknown error"),
+                    }
+                )
+                yield f"data: {payload}\n\n"
+                return
+            else:
+                payload = json.dumps(
+                    {
+                        "type": "progress",
+                        "status": progress.get("status", "unknown"),
+                        "pct": progress.get("pct", 0),
+                    }
+                )
+                yield f"data: {payload}\n\n"
+
+            await asyncio.sleep(_PROGRESS_POLL_INTERVAL)
+            elapsed += _PROGRESS_POLL_INTERVAL
+
+        # Timeout reached
+        payload = json.dumps({"type": "timeout", "detail": "Progress tracking timed out."})
+        yield f"data: {payload}\n\n"
+
+    return StreamingResponse(
+        _progress_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/transcribe", response_model=TranscriptionResponse, tags=["Transcription"])

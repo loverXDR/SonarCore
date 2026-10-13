@@ -72,10 +72,12 @@ class ChatMessageResponse(BaseModel):
 
 class TranscriptionSegment(BaseModel):
     """A segment of transcribed audio with timestamps."""
+
     start: float
     end: float
     text: str
     speaker: Optional[str] = None
+
 
 class TranscriptionResponse(BaseModel):
     """Response schema for the direct transcription endpoint.
@@ -116,3 +118,15 @@ class HealthCheckResponse(BaseModel):
     dependencies: Dict[str, str] = Field(
         default_factory=dict, description="Status of major dependencies"
     )
+
+
+class AsyncTaskResponse(BaseModel):
+    """Response returned when an async background task is started.
+
+    Attributes:
+        task_id (str): Unique identifier to poll progress via SSE.
+        message (str): Human-readable status message.
+    """
+
+    task_id: str = Field(description="Unique task identifier for progress tracking")
+    message: str = Field(description="Status message")

@@ -84,6 +84,14 @@ class InMemorySessionRepository(BaseSessionRepository):
 
     def __init__(self):
         self._sessions: Dict[str, SessionRecord] = {}
+        self._lock = None  # Lazy init for threading
+
+    def _ensure_lock(self):
+        """Lazy initialize lock for thread safety"""
+        if self._lock is None:
+            import threading
+            self._lock = threading.Lock()
+        return self._lock
 
     def add(self, session_id: str, agent: SonarAgent, config: AgentConfig) -> None:
         """Add a new session memory-based repository
@@ -93,11 +101,12 @@ class InMemorySessionRepository(BaseSessionRepository):
             agent (SonarAgent): The agent instance.
             config (AgentConfig): Agent configuration.
         """
-        self._sessions[session_id] = SessionRecord(
-            session_id=session_id,
-            agent=agent,
-            config=config
-        )
+        with self._ensure_lock():
+            self._sessions[session_id] = SessionRecord(
+                session_id=session_id,
+                agent=agent,
+                config=config
+            )
 
     def get(self, session_id: str) -> Optional[SessionRecord]:
         """Retrieve a session from memory
@@ -108,10 +117,11 @@ class InMemorySessionRepository(BaseSessionRepository):
         Returns:
             Optional[SessionRecord]: session record or None.
         """
-        record = self._sessions.get(session_id)
-        if record:
-            record.update_activity()
-        return record
+        with self._ensure_lock():
+            record = self._sessions.get(session_id)
+            if record:
+                record.update_activity()
+            return record
 
     def list_all(self) -> List[SessionRecord]:
         """List all active sessions in memory
@@ -119,7 +129,8 @@ class InMemorySessionRepository(BaseSessionRepository):
         Returns:
             List[SessionRecord]: list of active records.
         """
-        return list(self._sessions.values())
+        with self._ensure_lock():
+            return list(self._sessions.values())
 
     def delete(self, session_id: str) -> bool:
         """Delete a session from dictionary
@@ -130,7 +141,8 @@ class InMemorySessionRepository(BaseSessionRepository):
         Returns:
             bool: True if deleted.
         """
-        if session_id in self._sessions:
-            del self._sessions[session_id]
-            return True
-        return False
+        with self._ensure_lock():
+            if session_id in self._sessions:
+                del self._sessions[session_id]
+                return True
+            return False

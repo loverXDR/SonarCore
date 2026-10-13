@@ -1,16 +1,24 @@
 """Agent Session Manager Service"""
 
+import logging
+import traceback
 import uuid
-from typing import List, Optional, AsyncIterable, Dict
-from fastapi.concurrency import run_in_threadpool
-import qdrant_client
+from typing import List, Optional, Dict
+
 import httpx
+import qdrant_client
+from fastapi.concurrency import run_in_threadpool
 
 from Core.Schemas import AgentConfig, AgentResponse, AgentMessage
 from Agent_workflow.pipeline import SonarPipeline
 from Agent_workflow.agent import SonarAgent
 from .repositories import BaseSessionRepository
 from .schemas import SessionInfo
+
+logger = logging.getLogger(__name__)
+
+# In-process progress store for async tasks (not persisted across restarts)
+_task_progress: Dict[str, dict] = {}
 
 
 class AgentManager:
@@ -21,17 +29,23 @@ class AgentManager:
         self.default_config = default_config
 
     async def create_session_from_audio(
-        self, 
-        audio_path: str, 
-        use_diarization: bool = False, 
-        config: Optional[AgentConfig] = None
+        self,
+        audio_path: str,
+        use_diarization: bool = False,
+        config: Optional[AgentConfig] = None,
+        task_id: Optional[str] = None,
     ) -> str:
         """Process audio file and create a new agent session asynchronously.
+
+        When *task_id* is supplied the method publishes progress updates into
+        the module-level ``_task_progress`` dict so that the SSE progress
+        endpoint can stream them to the client.
 
         Args:
             audio_path (str): Path to the audio file on the server.
             use_diarization (bool, optional): Whether to use speaker diarization. Defaults to False.
             config (AgentConfig, optional): Optional override for agent config. Defaults to None.
+            task_id (str, optional): If provided, progress is written to ``_task_progress[task_id]``.
 
         Returns:
             str: Processed session ID.
@@ -39,11 +53,38 @@ class AgentManager:
         pipeline_config = config or self.default_config
         pipeline = SonarPipeline(config=pipeline_config)
         session_id = str(uuid.uuid4())
-        agent = await run_in_threadpool(
-            pipeline.process_audio, audio_path, use_diarization, session_id
-        )
-        self.repository.add(session_id, agent, pipeline_config)
-        return session_id
+
+        if task_id:
+            _task_progress[task_id] = {"status": "transcribing", "pct": 10}
+
+        try:
+            text = await run_in_threadpool(
+                pipeline.transcribe_audio_to_text, audio_path, use_diarization
+            )
+
+            if task_id:
+                _task_progress[task_id] = {"status": "indexing", "pct": 60}
+
+            agent = await run_in_threadpool(pipeline.process_text, text, session_id)
+            self.repository.add(session_id, agent, pipeline_config)
+
+            if task_id:
+                _task_progress[task_id] = {
+                    "status": "ready",
+                    "pct": 100,
+                    "session_id": session_id,
+                }
+
+            return session_id
+
+        except Exception:
+            if task_id:
+                _task_progress[task_id] = {
+                    "status": "error",
+                    "pct": 0,
+                    "detail": traceback.format_exc(),
+                }
+            raise
 
     async def create_session_from_text(
         self, 
@@ -185,6 +226,11 @@ class AgentManager:
             bool: True if deleted successfully, False otherwise.
         """
         return self.repository.delete(session_id)
+
+    @staticmethod
+    def get_task_progress(task_id: str) -> Optional[dict]:
+        """Return the current progress dict for *task_id*, or ``None``."""
+        return _task_progress.get(task_id)
 
     async def check_health(self) -> Dict[str, str]:
         """Check availability of system dependencies (Vector DB and LLM).
