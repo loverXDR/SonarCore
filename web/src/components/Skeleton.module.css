@@ -1,0 +1,50 @@
+.skeleton {
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* SessionCardSkeleton */
+.cardSkeleton {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cardFooter {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ChatMessageSkeleton */
+.messageSkeleton {
+  display: flex;
+  gap: 16px;
+  max-width: 80%;
+}
+
+.messageAssistant {
+  align-self: flex-start;
+}
+
+.messageUser {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.messageBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

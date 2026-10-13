@@ -1,0 +1,353 @@
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+/* Progress bar */
+.progressWrap {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 32px;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--gradient-primary);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.uploaderBox {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px;
+}
+
+.error {
+  margin-top: 20px;
+  color: var(--error);
+  font-size: 14px;
+  text-align: center;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.resultBox {
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.resultHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.resultHeader h2 {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.headerActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.actionBtn {
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.actionBtn:hover {
+  background: var(--bg-card);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.createBtn {
+  background: var(--primary);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.createBtn:hover {
+  background: var(--primary-hover);
+}
+
+.textContent {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  line-height: 1.6;
+  margin-bottom: 32px;
+  white-space: pre-wrap;
+}
+
+.segments {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.segment {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  transition: border-color 0.15s;
+}
+
+.segment:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.segmentMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.speaker {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Copy button on segments */
+.segCopyBtn {
+  margin-left: auto;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.segment:hover .segCopyBtn {
+  opacity: 1;
+}
+
+.segCopyBtn:hover {
+  color: var(--primary);
+}
+
+.segmentText {
+  font-size: 14px;
+  line-height: 1.5;
+  border-left: 3px solid transparent;
+  padding-left: 12px;
+}
+
+/* Edit mode */
+.editModeBox {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.editModeTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.editTextarea {
+  width: 100%;
+  min-height: 150px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 16px;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.editTextarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.segmentsEditList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.segmentEdit {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.segmentEditHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.inputGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inputGroup label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inputGroup input {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 90px;
+}
+
+.inputGroup input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.inputGroup input[type="text"] {
+  width: 120px;
+}
+
+.segmentEditTextarea {
+  width: 100%;
+  min-height: 60px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 10px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.segmentEditTextarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.editActions {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.saveBtn {
+  background: var(--primary);
+  color: white;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.saveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
