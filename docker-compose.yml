@@ -41,8 +41,45 @@ services:
       - "6337:6333"
       - "6338:6334"
     volumes:
-
       - qdrant_data:/qdrant/storage
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sonarcore_postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=sonar
+      - POSTGRES_PASSWORD=sonar_pass
+      - POSTGRES_DB=sonarcore
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar -d sonarcore"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: sonarcore_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://sonar:sonar_pass@postgres:5432/sonarcore?schema=public
+      - NEXTAUTH_SECRET=sonarcore_secret_key_change_me
+      - NEXTAUTH_URL=http://localhost:3000
+      - AUTH_TRUST_HOST=true
+      - SONARCORE_API_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
 volumes:
   hf_cache:
@@ -51,3 +88,5 @@ volumes:
     name: sonarcore_whisper_cache
   qdrant_data:
     name: sonarcore_qdrant_data
+  postgres_data:
+    name: sonarcore_postgres_data
